@@ -2,7 +2,6 @@
 # Using cv2 instead of PIL because opencv is faster.
 
 
-
 import os
 import sys
 import random
@@ -25,12 +24,19 @@ WARN = 1
 ERR = 2
 SUC = 3
 
-ACCEPTED_IMAGE_FORMATS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff')
-
+ACCEPTED_IMAGE_FORMATS = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff")
 
 
 class PhotoMosaic:
-    def __init__(self, target_image, tile_directory, output_image, tile_size=32, grid_size=8, reuse_images=True):
+    def __init__(
+        self,
+        target_image,
+        tile_directory,
+        output_image,
+        tile_size=32,
+        grid_size=8,
+        reuse_images=True,
+    ):
         self.target_image = target_image
         self.tile_directory = tile_directory
         self.output_image = output_image
@@ -53,8 +59,6 @@ class PhotoMosaic:
         self.fill_grid()
         self.save_image()
 
-    
-
 
 def mosaic(input_img_filename, tile_imgs_foldername):
     # Load the background image and the array of overlay images
@@ -66,8 +70,6 @@ def mosaic(input_img_filename, tile_imgs_foldername):
 
     return
 
-
-
     # Define a function to compare images and find the best one
     def compare_images(target_values, overlay_image):
         # Compute a metric to determine how well the overlay image matches the target values
@@ -76,7 +78,7 @@ def mosaic(input_img_filename, tile_imgs_foldername):
         return diff
 
     best_overlay = None
-    best_diff = float('inf')
+    best_diff = float("inf")
 
     # Iterate through overlay images to find the best one
     for overlay_image in tqdm(overlay_images):
@@ -90,33 +92,32 @@ def mosaic(input_img_filename, tile_imgs_foldername):
     result = cv2.add(background_image, best_overlay)
 
     # Save the result
-    cv2.imwrite('result.jpg', result)
+    cv2.imwrite("result.jpg", result)
 
 
 def load_img(img_path):
-
     try:
         # Load the image using cv2
         image = cv2.imread(img_path)
-                
-        # print_msg(f"Loaded image {img_path}", SUC)
+
+        print_msg(f"Loaded image {img_path}", SUC, True)
         return image
-    
+
     except Exception as e:
         print_msg(f"Error loading image {img_path}\n{e}", ERR)
         return None
+
 
 def load_imgs(folder_path):
     images = []
 
     # Loop through the files in the folder
     for filename in tqdm(os.listdir(folder_path)):
-
         # Check if the file is an image
         if filename.endswith(ACCEPTED_IMAGE_FORMATS):
             # Construct the full path to the image
             img_path = os.path.join(folder_path, filename)
-            
+
             # Load the image using cv2
             img = load_img(img_path)
             if img is not None:
@@ -124,29 +125,40 @@ def load_imgs(folder_path):
 
     return images
 
-def print_msg(msg, msg_type=None):
+
+def print_msg(msg, msg_type=None, tqdm_bar=None):
     if msg_type == INFO:
-        print(colored(msg, 'blue'))
+        msg_col = colored(msg, "blue")
     elif msg_type == SUC:
-        print(colored(msg, 'green'))
+        msg_col = colored(msg, "green")
     elif msg_type == WARN:
-        print(colored(msg, 'yellow'))
+        msg_col = colored(msg, "yellow")
     elif msg_type == ERR:
-        print(colored(msg, 'red'))
+        msg_col = colored(msg, "red")
+    else:
+        msg_col = msg
+
+    if tqdm_bar:
+        tqdm.write(msg_col)
     else:
         print(msg)
-
-if __name__ == '__main__':
+    return
     
+
+
+if __name__ == "__main__":
     # Create mosaic image from a given image and a folder of images.
     # Usage: python photomosaic.py <image> <folder>
     # Example: python photomosaic.py mona_lisa.jpg my_photos
 
-    print_msg('Photo Mosaic Generator', INFO)
-    print_msg('----------------------', INFO)
+    print_msg("Photo Mosaic Generator", INFO)
+    print_msg("----------------------", INFO)
 
     if len(sys.argv) < 3:
-        print_msg('You must provide an image and a folder of images.\nExample: python photomosaic.py img.jpg my_photos', ERR)
+        print_msg(
+            "You must provide an image and a folder of images.\nExample: python photomosaic.py img.jpg my_photos",
+            ERR,
+        )
         sys.exit(1)
 
     input_img_filename = sys.argv[1]
