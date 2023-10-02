@@ -99,49 +99,114 @@ def crop_to_square(imgs):
         tiles.append(img)
     return tiles
 
+# Define a function to compare images and find the best one
+def compare_images(target_values, overlay_image):
+    # Compute a metric to determine how well the overlay image matches the target values
+    # Calculate the absolute difference between the overlay image and target values
+    diff = np.abs(overlay_image - target_values).mean()
+    return diff
+
+
+def split_img_to_tiles(img, tile_size):
+
+    # Split the image into tiles
+    tiles = []
+    for i in range(0, img.shape[0], tile_size):
+        for j in range(0, img.shape[1], tile_size):
+
+            tile = img[i : i + tile_size, j: j + tile_size]
+            tiles.append(tile)
+
+    return tiles
+
+
+
+def fit_tiles_to_img(input_tiles, output_tiles):
+
+    output_img = input_tiles.copy()
+
+    for tile in input_tiles:
+        print(tile.shape)
+    
+    # return output_img
+
+    # Loop through the tiles and find the best one for each tile
+    for i, tile in enumerate(input_tiles):
+        best_overlay = None
+        best_diff = float("inf")
+
+        # Iterate through overlay images to find the best one
+        for overlay_image in tqdm(output_tiles):
+            diff = compare_images(tile, overlay_image)
+            # print(overlay_image)
+            if diff < best_diff:
+                best_diff = diff
+                best_overlay = overlay_image
+
+        # Overlay the best image onto the background
+        print(best_overlay.shape)
+        print(tile.shape)
+        output_img[i] = cv2.add(tile, best_overlay)
+        # output_img[i] = best_overlay
+
+    return output_img
+
+
+def square_crop(img):
+    # Crop the image to a square from the middle of the image
+    # Take the minimum of the width and height and use that as the size of the square. Make sure the size is even.
+    width, height, _ = img.shape
+    size = min(img.shape[0], img.shape[1])
+    print(size)
+    size = size - (size % 2)
+    print(size)
+    middle_x = width // 2
+    middle_y = height // 2
+    half_size = size // 2
+    print_msg(f"centerx = {middle_x}, centery = {middle_y}, halfsize={half_size}", INFO)
+    return img[middle_x - half_size : middle_x + half_size, middle_y - half_size : middle_y + half_size]
+
+
+def tiles_to_img(fitted_tiles, split):
+    result = []
+    for i in range(0, len(fitted_tiles), split):
+        print(i)
+        result.append(np.hstack(fitted_tiles[i : i + split]))
+    
+    return np.vstack(result)
+
 
 def mosaic(input_img_filename, tile_imgs_foldername):
-    # Load the background image and the array of overlay images
-    # background_image = cv2.imread('image-4.jpg')
-    # overlay_images = [cv2.imread('image-1.jpg'), cv2.imread('image-2.jpg'), cv2.imread('image-3.jpg')]
 
     input_img = load_img(input_img_filename)
     tile_imgs = load_imgs(tile_imgs_foldername)
 
-    # # Resize the img to 100x100
-    # input_img = cv2.resize(input_img, (1000,400))
-
     # Crop images to squares
-    tiles = crop_to_square(tile_imgs)
+    input_img = square_crop(input_img)
+    
+    print(input_img.shape)
+    output_tiles = crop_to_square(tile_imgs)
+
+    # Split the image into tiles
+    split = 2**3
+    tile_size = input_img.shape[0] // split
+    print(input_img.shape[0])
+    print_msg(f"Tilesize: {tile_size}", INFO)
+
+    # Make output tiles as large as the input tiles
+    output_tiles = [cv2.resize(tile, (tile_size, tile_size)) for tile in output_tiles]
 
 
+    input_tiles = split_img_to_tiles(input_img, tile_size)
 
-    cv2.imwrite("input2.jpg", input_img)
+    fitted_tiles = fit_tiles_to_img(input_tiles, output_tiles)
+    
+    result = tiles_to_img(fitted_tiles, split)
+
+    cv2.imwrite("test.jpg", result)
+
     return
 
-    # Define a function to compare images and find the best one
-    def compare_images(target_values, overlay_image):
-        # Compute a metric to determine how well the overlay image matches the target values
-        # Calculate the absolute difference between the overlay image and target values
-        diff = np.abs(overlay_image - target_values).mean()
-        return diff
-
-    best_overlay = None
-    best_diff = float("inf")
-
-    # Iterate through overlay images to find the best one
-    for overlay_image in tqdm(overlay_images):
-        diff = compare_images(background_image, overlay_image)
-        # print(overlay_image)
-        if diff < best_diff:
-            best_diff = diff
-            best_overlay = overlay_image
-
-    # Overlay the best image onto the background
-    result = cv2.add(background_image, best_overlay)
-
-    # Save the result
-    cv2.imwrite("result.jpg", result)
 
 
 def load_img(img_path):
@@ -167,7 +232,7 @@ def load_imgs(folder_path):
         # Check if there is a folder inside the folder
         if os.path.isdir(os.path.join(folder_path, filename)):
             # If there is a folder inside the folder, take the images from that folder
-            load_imgs(os.path.join(folder_path, filename))
+            images += load_imgs(os.path.join(folder_path, filename))
         
 
         # Check if the file is an image
