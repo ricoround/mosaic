@@ -60,6 +60,46 @@ class PhotoMosaic:
         self.save_image()
 
 
+class Tile:
+    def __init__(self, path, image):
+        self.path = path
+        self.image = image
+        self.average_color = self.get_average_color(image)
+
+    def __repr__(self):
+        return f"Tile({self.path})"
+
+    def get_average_color(self):
+        # Calculate the average color of the image
+        average_color = np.average(self.image, axis=(0, 1))
+        return average_color
+
+
+class TileManager:
+    def __init__(self, tile_directory, tile_size, reuse_images):
+        self.tile_directory = tile_directory
+        self.tile_size = tile_size
+        self.reuse_images = reuse_images
+        self.tiles = []
+
+
+def crop_to_square(imgs):
+    # Crop images to squares
+    tiles = []
+    for img in imgs:
+        # Crop the image to a square from the middle of the image
+        # Take the minimum of the width and height and use that as the size of the square
+        size = min(img.shape[0], img.shape[1])
+
+        # Calculate the top left corner of the crop
+        x = (img.shape[1] // 2) - (size // 2)
+        y = (img.shape[0] // 2) - (size // 2)
+
+        img = img[y : y + size, x : x + size]
+        tiles.append(img)
+    return tiles
+
+
 def mosaic(input_img_filename, tile_imgs_foldername):
     # Load the background image and the array of overlay images
     # background_image = cv2.imread('image-4.jpg')
@@ -68,6 +108,15 @@ def mosaic(input_img_filename, tile_imgs_foldername):
     input_img = load_img(input_img_filename)
     tile_imgs = load_imgs(tile_imgs_foldername)
 
+    # # Resize the img to 100x100
+    # input_img = cv2.resize(input_img, (1000,400))
+
+    # Crop images to squares
+    tiles = crop_to_square(tile_imgs)
+
+
+
+    cv2.imwrite("input2.jpg", input_img)
     return
 
     # Define a function to compare images and find the best one
@@ -111,8 +160,16 @@ def load_img(img_path):
 def load_imgs(folder_path):
     images = []
 
-    # Loop through the files in the folder
+
+    # Loop through the files and folders in the folder
     for filename in tqdm(os.listdir(folder_path)):
+
+        # Check if there is a folder inside the folder
+        if os.path.isdir(os.path.join(folder_path, filename)):
+            # If there is a folder inside the folder, take the images from that folder
+            load_imgs(os.path.join(folder_path, filename))
+        
+
         # Check if the file is an image
         if filename.endswith(ACCEPTED_IMAGE_FORMATS):
             # Construct the full path to the image
@@ -141,9 +198,8 @@ def print_msg(msg, msg_type=None, tqdm_bar=None):
     if tqdm_bar:
         tqdm.write(msg_col)
     else:
-        print(msg)
+        print(msg_col)
     return
-    
 
 
 if __name__ == "__main__":
