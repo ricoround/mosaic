@@ -30,49 +30,68 @@ ACCEPTED_IMAGE_FORMATS = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff")
 class PhotoMosaic:
     def __init__(
         self,
-        target_image,
+        target_path,
         tile_directory,
         output_image,
         tile_size=32,
-        grid_size=8,
+        grid_size=4,
         reuse_images=True,
     ):
-        self.target_image = target_image
         self.tile_directory = tile_directory
         self.output_image = output_image
         self.tile_size = tile_size
         self.grid_size = grid_size
         self.reuse_images = reuse_images
-
-        self.samples = []
         self.tiles = []
-        self.image_width = 0
-        self.image_height = 0
-        self.grid = []
-        self.grid_width = 0
-        self.grid_height = 0
-        self.image = None
+
+        
+
+        # Load the target image
+        target_image = cv2.imread(target_path)
+        height, width = target_image.shape[0], target_image.shape[1]
+        min_size = min(height, width)
+        tile_size = min_size // self.grid_size
+        print(f"tile_size: {tile_size}")
+
+        # How many tiles fit in the image. Always an integer.
+        self.grid = [height // tile_size, width // tile_size] 
+
+        # Create the grid
+        self.grid_height =  self.grid[0] * tile_size
+        self.grid_width = self.grid[1] * tile_size
+        print(f"grid: {self.grid}, wh:{self.grid_width, self.grid_height}")
+        self.target_image = target_image[0: self.grid_height,0: self.grid_width]
+        print(f"target_image: {self.target_image.shape}")
+
+        # Tile size
+        self.tile_size = tile_size
+        self.image = self.target_image.copy()
+
+        print(f"target_image: {self.target_image.shape}")
+        print(f"image: {self.image.shape}")
 
     def generate(self):
         self.load_tiles(self.tile_directory)
+        self.print_info()
+        self.fit_tiles()
+
         # self.load_samples()
         # self.create_tiles()
         # self.resize_image()
         # self.create_grid()
         # self.fill_grid()
         # self.save_image()
-        return
+        return self.image
+    
+    def print_info(self):
+        print_msg(f"Tile directory: {self.tile_directory}", INFO)
+        print_msg(f"Target image: {self.target_image.shape}", INFO)
+        print_msg(f"Grid size: {self.grid_size}", INFO)
+        print_msg(f"Tile size: {self.tile_size}", INFO)
+        print_msg(f"Number of tiles: {len(self.tiles)}", INFO)
+        print_msg(f"Grid: {self.grid}, wh:{self.grid_width, self.grid_height}", INFO)
+        print_msg(f"Grid tiles: {self.grid[0] * self.grid[1]}", INFO)
 
-    def load_samples(self):
-        # Load the tiles from the tile directory
-        self.samples = load_imgs(self.tile_directory)
-        print_msg(f"Loaded {len(self.tiles)} tiles", INFO)
-        return
-
-    def create_tiles(self):
-        # Create tiles from the samples
-        self.tiles = [Tile(img) for img in self.samples]
-        print_msg(f"Created {len(self.tiles)} tiles", INFO)
         return
 
     def load_tile(self, path):
@@ -81,8 +100,8 @@ class PhotoMosaic:
             # Load the image using cv2
             img = cv2.imread(path)
             if img is not None:
-                self.tiles.append(Tile(path, img))
-                print_msg(f"Loaded image {path}", SUC)
+                self.tiles.append(Tile(path, img, self.tile_size))
+                print_msg(f"Loaded tile: {path}", SUC)
 
         return
 
@@ -90,50 +109,101 @@ class PhotoMosaic:
         # Loop through the files and folders in the folder
         for root, subfolder, filename in os.walk(tile_dir):
             # Check if there is a folder inside the folder
-            for dir in subfolder:
-                print(f"subfolder: {subfolder}")
-                # If there is a folder inside the folder, take the images from that folder
-                self.load_tiles(os.path.join(root, dir))
+            # for dir in subfolder:
+            #     # If there is a folder inside the folder, take the images from that folder
+            #     self.load_tiles(os.path.join(root, dir))
 
             for file in filename:
                 self.load_tile(os.path.join(root, file))
 
+            print_msg(f"Loaded {len(self.tiles)} tiles", INFO)
+
+        return
+    
+    def get_best_tile(self, i, j):
+        # Get the best tile for the position
+        # Calculate the average color of the target tile
+        target_tile = self.target_image[i * self.tile_size : (i + 1) * self.tile_size, j * self.tile_size : (j + 1) * self.tile_size]
+        print(f"target_tile: {target_tile.shape}")
+        target_average_color = np.mean(target_tile)
+
+        tiles_averages = [tile.average_color for tile in self.tiles]
+
+        differences = np.abs(tiles_averages - target_average_color)
+    
+        # Find the index of the minimum absolute difference
+        best_tile_index = np.argmin(differences)
+        
+        # Append the closest value and its index to the respective lists
+        # closest_values.append(second_array[min_index])
+        # closest_indices.append(min_index)
+
+
+        # Return the best tile
+        return self.tiles[best_tile_index]
+
+
+    def add_tile(self, tile, y, x):
+        # Add the tile to the image
+        # Calculate the position of the tile
+        # x = i * self.tile_size
+        # y = j * self.tile_size
+
+        print(f"tile: {tile.tile.shape}")
+        print(f"image: {self.image.shape}")
+
+        print(f"x: {x}, y: {y}")
+
+        test = self.image[y * self.tile_size : (y+1) * self.tile_size, x * self.tile_size : (x+1) * self.tile_size]
+        print(f"test: {test.shape}")
+
+
+        # Add the tile to the image
+        self.image[y * self.tile_size : (y+1) * self.tile_size, x * self.tile_size : (x+1) * self.tile_size] = tile.tile
+
         return
 
-    def resize_image(self):
-        return
+    def fit_tiles(self):
+        # Loop through the grid and find the best tile for each position
+        # Loop through the rows
+        for j in range(self.grid[0]):
+            # Loop through the columns
+            for i in range(self.grid[1]):
+                # Get the tile that fits best
+                print(f"i: {i}, j: {j}")
+                tile = self.get_best_tile(j, i)
+
+                # Add the tile to the image
+                self.add_tile(tile, j, i)
 
 
 class Tile:
-    def __init__(self, path, image):
+    def __init__(self, path, image, tile_size=32):
         self.path = path
         self.image = image
+        self.tile_size = tile_size
+        self.create_tile()
         self.average_color = self.get_average_color()
 
     def __repr__(self):
         return f"Tile({self.path})"
 
+    def create_tile(self):
+        # Create a tile from the image
+        # Resize the image to the square tile size
+        size = self.image.shape[0], self.image.shape[1]
+        min_size = min(size)
+        # Create a square image from the left top corner of the image
+        img = self.image[:min_size, :min_size]
+        self.tile = cv2.resize(img, (self.tile_size, self.tile_size))
+        return
+
     def get_average_color(self):
-        # Calculate the average color of the image
-        average_color = np.average(self.image, axis=(0, 1))
-        return average_color
+        # Calculate the average color of the tile
+        return np.mean(self.tile)
 
 
-def crop_to_square(imgs):
-    # Crop images to squares
-    tiles = []
-    for img in imgs:
-        # Crop the image to a square from the middle of the image
-        # Take the minimum of the width and height and use that as the size of the square
-        size = min(img.shape[0], img.shape[1])
 
-        # Calculate the top left corner of the crop
-        x = (img.shape[1] // 2) - (size // 2)
-        y = (img.shape[0] // 2) - (size // 2)
-
-        img = img[y : y + size, x : x + size]
-        tiles.append(img)
-    return tiles
 
 
 # Define a function to compare images and find the best one
@@ -143,16 +213,6 @@ def compare_images(target_values, overlay_image):
     diff = np.abs(overlay_image - target_values).mean()
     return diff
 
-
-def split_img_to_tiles(img, tile_size):
-    # Split the image into tiles
-    tiles = []
-    for i in range(0, img.shape[0], tile_size):
-        for j in range(0, img.shape[1], tile_size):
-            tile = img[i : i + tile_size, j : j + tile_size]
-            tiles.append(tile)
-
-    return tiles
 
 
 def fit_tiles_to_img(input_tiles, output_tiles):
@@ -305,15 +365,16 @@ if __name__ == "__main__":
     print_msg("Photo Mosaic Generator", INFO)
     print_msg("----------------------", INFO)
 
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 4:
         print_msg(
-            "You must provide an image and a folder of images.\nExample: python photomosaic.py img.jpg my_photos",
+            "You must provide an image and a folder of images.\nExample: python photomosaic.py img.jpg my_photos 16",
             ERR,
         )
         sys.exit(1)
 
     input_img_filename = sys.argv[1]
     tile_imgs_foldername = sys.argv[2]
+    grid_size = int(sys.argv[3])
 
     # Check if the image exists
     if not os.path.isfile(input_img_filename):
@@ -329,10 +390,8 @@ if __name__ == "__main__":
         input_img_filename,
         tile_imgs_foldername,
         "output.jpg",
-        tile_size=32,
-        grid_size=8,
+        grid_size=grid_size,
     )
 
-    print(mosaic.target_image)
-
     mosaic.generate()
+    cv2.imwrite("test_result.jpg", mosaic.image)
